@@ -23,3 +23,4 @@ libraryDependencies ++= Seq(
 )
 
 
+mainClass in assembly := Some("Main")
