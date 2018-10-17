@@ -40,7 +40,7 @@ def user2ip(id): return "172.10.{}.{}".format(int(id / 255), id % 255)
 def bot2ip(id): return "172.20.{}.{}".format(int(id / 255), id % 255)
 def asits(dt): return int(dt.timestamp())   
 
-def asJson(entry): return { 'unix_time' : asits(entry[0]), 'category_id': entry[1], 'ip' : entry[2], 'type' : entry[3] } 
+def asJson(entry): return { 'time' : asits(entry[0]), 'categoryId': entry[1], 'ip' : entry[2], 'action' : entry[3] } 
 
 def writeAsJson(entry, fd = None):
     entry = asJson(entry)
