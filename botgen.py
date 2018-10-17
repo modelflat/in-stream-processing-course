@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys
 import json
 import random
@@ -40,9 +42,10 @@ def asits(dt): return int(dt.timestamp())
 
 def asJson(entry): return { 'unix_time' : asits(entry[0]), 'category_id': entry[1], 'ip' : entry[2], 'type' : entry[3] } 
 
-def writeAsJson(entry, fd = None): 
+def writeAsJson(entry, fd = None):
+    entry = asJson(entry)
     if fd: 
-        json.dump(asJson(entry), fd) 
+        json.dump(entry, fd) 
     else: 
         print(entry)
 
@@ -71,18 +74,19 @@ def do_generate(fd = None):
     first = True
     for entry in generate_log(args, datetime.now()):
         if not first and fd: 
-            fd.write(",\n") 
+            fd.write("\n") 
         else: 
             first = False
         writeAsJson(entry, fd)         
 
 def main(args):
     print("started with parameters :", args) 
+    random.seed(args.seed)
     if args.file:
         with open(args.file, 'w') as fd:
-            fd.write("[")
+            # fd.write("[")
             do_generate(fd)
-            fd.write("]")
+            # fd.write("]")
     else: 
         do_generate()
  
@@ -95,6 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--duration', type=int, default=300,   help="log duration in sec")
     parser.add_argument('-n', '--freq',     type=int, default=100,   help="number of user's requests in sec")
     parser.add_argument('-f', '--file',     type=str, default=None,   help="write to file")
+    parser.add_argument('-s', '--seed',     type=str, default="bots suck",   help="random seed in order to replay data")
     args = parser.parse_args()
 
     main(args)
