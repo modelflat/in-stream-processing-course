@@ -77,13 +77,14 @@ def do_generate(fd = None):
             fd.write("\n") 
         else: 
             first = False
-        writeAsJson(entry, fd)         
+        writeAsJson(entry, fd)
+        fd.flush()
 
 def main(args):
     print("started with parameters :", args) 
     random.seed(args.seed)
     if args.file:
-        with open(args.file, 'w') as fd:
+        with open(args.file, 'a') as fd:
             # fd.write("[")
             do_generate(fd)
             # fd.write("]")

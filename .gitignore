@@ -3,4 +3,7 @@ target/
 
 kafka-storage/
 
+.DS_Store
+
+*.jar
 *.log
