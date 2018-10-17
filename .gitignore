@@ -1,4 +1,6 @@
 .idea/
 target/
 
+kafka-storage/
+
 *.log
