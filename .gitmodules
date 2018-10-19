@@ -1,3 +1,0 @@
-[submodule "logs-to-kafka/kafka-connect-fs"]
-	path = logs-to-kafka/kafka-connect-fs
-	url = https://github.com/mmolimar/kafka-connect-fs
