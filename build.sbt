@@ -12,10 +12,11 @@ libraryDependencies ++= Seq(
   "org.apache.spark" % "spark-streaming-kafka-0-10_2.11"
 ).map(_ % "2.3.2")
 
-// FS -> kafka
+// ignite
 libraryDependencies ++= Seq(
-
-)
+  "org.apache.ignite" % "ignite-core",
+  "org.apache.ignite" % "ignite-spark"
+).map(_ % "2.6.0")
 
 // spark -> cassandra
 libraryDependencies ++= Seq(
