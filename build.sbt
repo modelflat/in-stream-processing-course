@@ -1,6 +1,6 @@
 name := "Streaming Capstone"
 
-version := "0.1"
+version := "0.2"
 
 scalaVersion := "2.11.8"
 
@@ -8,9 +8,8 @@ scalaVersion := "2.11.8"
 libraryDependencies ++= Seq(
   "org.apache.spark" % "spark-core_2.11",
   "org.apache.spark" % "spark-streaming_2.11",
-  "org.apache.spark" % "spark-sql_2.11",
-  "org.apache.spark" % "spark-streaming-kafka-0-10_2.11"
-).map(_ % "2.3.2")
+  "org.apache.spark" % "spark-sql_2.11"
+).map(_ % "2.3.2").map(_ % "provided")
 
 // ignite
 libraryDependencies ++= Seq(
@@ -18,10 +17,12 @@ libraryDependencies ++= Seq(
   "org.apache.ignite" % "ignite-spark"
 ).map(_ % "2.6.0")
 
+// kafka -> spark
+libraryDependencies += "org.apache.spark" %% "spark-streaming-kafka-0-10" % "2.3.2" // dstreams
+libraryDependencies += "org.apache.spark" %% "spark-sql-kafka-0-10" % "2.3.2" // structured
+
 // spark -> cassandra
-libraryDependencies ++= Seq(
-  "com.datastax.spark" % "spark-cassandra-connector_2.11"
-).map(_ % "2.3.2")
+libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "2.3.2"
 
 // circe for json parsing
 libraryDependencies ++= Seq(
@@ -31,3 +32,8 @@ libraryDependencies ++= Seq(
 ).map(_ % "0.10.0")
 
 mainClass in assembly := Some("Main")
+
+assemblyMergeStrategy in assembly := {
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case x => MergeStrategy.first
+}
