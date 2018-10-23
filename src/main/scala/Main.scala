@@ -16,19 +16,16 @@ import org.apache.spark.streaming.kafka010._
 import scala.concurrent.duration._
 
 object Config {
-  val BOT_IP_CASSANDRA_TTL = 10.minutes
-
+  val BOT_IP_CASSANDRA_TTL = 1.minutes
+  val WATERMARK = 30
   val BOT_CATEGORY_LIMIT = 10
   val BOT_REQUEST_LIMIT = 1000
   val BOT_CLICKS_TO_VIEWS_LIMIT = 5
-  val BOT_CLICKS_TO_VIEWS_MIN_FRAMES = 2
-
-  val DETECTION_WINDOW_INTERVAL = Seconds(10)
-  val DETECTION_SLIDE_INTERVAL = Seconds(10)
-
-  val SPARK_BATCH_INTERVAL = Seconds(10)
-
-  val SPARK_DSTREAM_REMEMBER_INTERVAL = Seconds(60)
+  val BOT_CLICKS_TO_VIEWS_MIN_FRAMES = 5
+  val DETECTION_WINDOW_INTERVAL = Seconds(15)
+  val DETECTION_SLIDE_INTERVAL = DETECTION_WINDOW_INTERVAL
+  val SPARK_BATCH_INTERVAL = Seconds(5)
+  val SPARK_DSTREAM_REMEMBER_INTERVAL = Minutes(10)
 
   val TOPICS = Array("clickstream-log")
 
@@ -63,12 +60,12 @@ case class Action(time: Long, categoryId: String, action: String) {
 case class EvaluatedStat(originalStat: IpStat, isBot: Boolean, reason: String)
 
 object EvaluatedStat {
-  def classify(ip: String, ipStat: List[IpStat]): EvaluatedStat = {
+  def classify(ipStat: List[IpStat]): EvaluatedStat = {
     val aggr = ipStat reduce (_+_)
 
     val strangeClicksToViews =
-      if (ipStat.size >= Config.BOT_CLICKS_TO_VIEWS_MIN_FRAMES)
-        (aggr.clicks.toDouble / math.max(aggr.views, 0.5)) > Config.BOT_CLICKS_TO_VIEWS_LIMIT
+      if (ipStat.size >= Config.BOT_CLICKS_TO_VIEWS_MIN_FRAMES || aggr.views > 0)
+        (aggr.clicks.toDouble / math.max(aggr.views, 1)) > Config.BOT_CLICKS_TO_VIEWS_LIMIT
       else false
 
     val tooManyRequests = (aggr.clicks + aggr.views) > Config.BOT_REQUEST_LIMIT
@@ -112,7 +109,7 @@ object Main extends App {
     (spark, streamingContext)
   }
 
-  def makeFilteredAndParsedLogStream(streamingContext: StreamingContext): DStream[(String, IpStat)] = {
+  def makeFilteredAndParsedLogStream(streamingContext: StreamingContext): DStream[((String, Long), IpStat)] = {
     val stream = KafkaUtils.createDirectStream[String, String](streamingContext,
       LocationStrategies.PreferConsistent,
       ConsumerStrategies.Subscribe[String, String](Config.TOPICS, Config.KAFKA_PARAMS)
@@ -121,7 +118,8 @@ object Main extends App {
     stream
       .map(r => (r.key(), decode[Action](r.value())))
       .filter(entry => entry._1 != null && !entry._1.isEmpty && entry._2.isRight)
-      .map(entry => (entry._1, entry._2.right.get.toIpStat))
+      .map(entry => (entry._1, entry._2.right.get))
+      .map(e => ((e._1, e._2.time / Config.WATERMARK), e._2.toIpStat))
   }
 
   def toCassandra(sc: SparkContext, stream: DStream[String]): DStream[String] = {
@@ -137,25 +135,28 @@ object Main extends App {
     stream
   }
 
-  def updateState(ip: String, newIpStatOpt: Option[IpStat], state: State[List[(IpStat, Long)]]): (String, EvaluatedStat) = {
+  def updateState(ipAndWatermarkedTime: (String, Long),
+                  newIpStatOpt: Option[IpStat],
+                  state: State[List[(IpStat, Long)]]): (String, List[IpStat]) = {
     val newStats = newIpStatOpt.getOrElse(IpStat.empty())
     if (!state.isTimingOut()) {
       // update state with new data
       state.update(
         if (state.exists) {
           // Get state, filter out old results and append new result to it
-          state.get.filter(x => x._2 < (Instant.now.getEpochSecond - 600)) :+ (newStats, Instant.now.getEpochSecond)
+          // TODO how to handle timestamp?
+          state.get.filter(x => x._2 < (Instant.now.getEpochSecond - 600)) :+ (newStats, ipAndWatermarkedTime._2)
         } else {
           // No previous state, create initial entry
-          List((newStats, Instant.now.getEpochSecond))
+          List((newStats, ipAndWatermarkedTime._2))
         }
       )
     }
     // now we are ready to make our decision
-    (ip, EvaluatedStat.classify(ip, state.get map (_._1)))
+    (ipAndWatermarkedTime._1, state.get map (_._1))
   }
 
-  def findBots(stream: DStream[(String, IpStat)]): DStream[(String, EvaluatedStat)] = {
+  def findBots(stream: DStream[((String, Long), IpStat)]): DStream[(String, EvaluatedStat)] = {
     stream
       .reduceByKeyAndWindow(
         (l: IpStat, r: IpStat) => l + r,
@@ -167,6 +168,8 @@ object Main extends App {
         //.initialState() // TODO can be used to load results from Ignite!
         .timeout(Minutes(10)) // removes users which haven't send any requests for 10 minutes
       )
+      .reduceByKey((l: List[IpStat], r: List[IpStat]) => l ++ r)
+      .mapValues(EvaluatedStat.classify)
       .filter(stat => stat._2.isBot)
   }
 
