@@ -9,13 +9,14 @@ libraryDependencies ++= Seq(
   "org.apache.spark" % "spark-core_2.11",
   "org.apache.spark" % "spark-streaming_2.11",
   "org.apache.spark" % "spark-sql_2.11"
-).map(_ % "2.3.2").map(_ % "provided")
+) .map(_ % "2.3.2")
+  //.map(_ % "provided")
 
 // ignite
-libraryDependencies ++= Seq(
-  "org.apache.ignite" % "ignite-core",
-  "org.apache.ignite" % "ignite-spark"
-).map(_ % "2.6.0")
+//libraryDependencies ++= Seq(
+//  "org.apache.ignite" % "ignite-core",
+//  "org.apache.ignite" % "ignite-spark"
+//).map(_ % "2.6.0")
 
 // kafka -> spark
 libraryDependencies += "org.apache.spark" %% "spark-streaming-kafka-0-10" % "2.3.2" // dstreams
@@ -33,7 +34,4 @@ libraryDependencies ++= Seq(
 
 mainClass in assembly := Some("Main")
 
-assemblyMergeStrategy in assembly := {
-  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
-  case x => MergeStrategy.first
-}
+assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false)
