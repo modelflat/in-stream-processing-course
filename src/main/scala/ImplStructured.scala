@@ -1,18 +1,36 @@
-import org.apache.spark.sql._
-import io.circe.parser._
-import org.apache.spark.sql.types.StringType
 import java.sql.Timestamp
+import java.time.Instant
 
-import org.apache.spark.sql.streaming.{OutputMode, Trigger}
+import com.datastax.spark.connector.cql.CassandraConnector
+import io.circe.parser._
+import org.apache.spark.sql._
+import org.apache.spark.sql.streaming.DataStreamWriter
+import org.apache.spark.sql.types.StringType
+
+// due to datastax.connector not supporting stream writing (yet), we just make our own ForeachWriter
+// of course this is unacceptable for production use. but as a training,
+// this is acceptable as data amounts we are dealing with are not very large :)
+// also, the original code can be found here:
+// https://github.com/polomarcus/Spark-Structured-Streaming-Examples/blob/master/src/main/scala/cassandra/foreachSink/CassandraSinkForeach.scala
+class CassandraForEachWriter(val connector: CassandraConnector) extends ForeachWriter[AggregatedLogRecord] {
+  val keySpace = "fraud_detector"
+  val tableName = "bots_structured"
+
+  private def makeQuery(record: AggregatedLogRecord): String =
+    s"""insert into $keySpace.$tableName (bot_ip, time_added) values('${record.ip}', '${Instant.now().getEpochSecond}')"""
+
+  def open(partitionId: Long, version: Long): Boolean = true
+
+  def process(record: AggregatedLogRecord): Unit = {
+    connector.withSessionDo(session => session.execute( makeQuery(record) ))
+  }
+
+  def close(errorOrNull: Throwable): Unit = { } // nothing to close
+}
 
 object ImplStructured {
 
   def run() {
-
-    val slidingWindowSize = "10 minutes"
-    val slideSize = "30 seconds"
-    val watermark = "30 seconds"
-
     val spark = makeSparkStuff()
 
     val ds = readStructuredDS(spark)
@@ -23,22 +41,17 @@ object ImplStructured {
 
     val botsDS = filterBots(spark, groupedDS)
 
-    botsDS.writeStream
-      .format("org.apache.spark.sql.cassandra")
-      .option("keyspace", "fraud_detector")
-      .option("table", "bots_structured")
-      .outputMode(OutputMode.Update())
+    val exported = toCassandra(spark, botsDS)
 
-      .trigger(Trigger.ProcessingTime("10 seconds"))
-      .start()
-      .awaitTermination()
-
+    exported.start().awaitTermination()
   }
 
   def makeSparkStuff(): SparkSession = {
     val spark = SparkSession.builder.master("local[*]")
       .config("spark.streaming.kafka.consumer.cache.enabled", "false")
       .config("spark.cassandra.connection.keep_alive_ms", 120000)
+      .config("spark.cassandra.output.ttl", 600)
+      .config("spark.cassandra.output.ifNotExists", "true")
       .getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
     spark
@@ -80,6 +93,10 @@ object ImplStructured {
 
   def filterBots(spark: SparkSession, ds: Dataset[AggregatedLogRecord]): Dataset[AggregatedLogRecord] = {
     ds.filter(alr => BotClassifier.classify(alr.clicks, alr.views, alr.categories.size)._1)
+  }
+
+  def toCassandra(spark: SparkSession, ds: Dataset[AggregatedLogRecord]): DataStreamWriter[AggregatedLogRecord] = {
+    ds.writeStream.foreach(new CassandraForEachWriter(CassandraConnector(spark.sparkContext.getConf)))
   }
 
 }

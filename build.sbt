@@ -13,10 +13,10 @@ libraryDependencies ++= Seq(
   //.map(_ % "provided")
 
 // ignite
-//libraryDependencies ++= Seq(
-//  "org.apache.ignite" % "ignite-core",
-//  "org.apache.ignite" % "ignite-spark"
-//).map(_ % "2.6.0")
+libraryDependencies ++= Seq(
+  "org.apache.ignite" % "ignite-core",
+  "org.apache.ignite" % "ignite-spark"
+).map(_ % "2.6.0")
 
 // kafka -> spark
 libraryDependencies += "org.apache.spark" %% "spark-streaming-kafka-0-10" % "2.3.2" // dstreams

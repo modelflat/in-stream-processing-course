@@ -5,18 +5,22 @@ import com.datastax.spark.connector.SomeColumns
 import com.datastax.spark.connector.writer.{TTLOption, WriteConf}
 import io.circe.generic.auto._
 import io.circe.parser._
+import org.apache.ignite.spark.{IgniteContext, IgniteRDD}
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.streaming._
 import org.apache.spark.streaming.dstream.DStream
-
 import org.apache.spark.streaming.kafka010._
 
 object ImplDStreams {
 
   def run() {
-
     val (spark, streamingContext) = makeSparkStuff()
+
+    val igniteContext = new IgniteContext(spark.sparkContext, "ignite/config.xml")
+
+    val sharedRDD = igniteContext.fromCache[String, String]("test")
+
     val stream = makeFilteredAndParsedLogStream(streamingContext)
 
     streamingContext.checkpoint("/tmp/spark-checkpoint")
@@ -25,14 +29,13 @@ object ImplDStreams {
 
     botStream.print()
 
-    toCassandra(
-      spark.sparkContext,
-      botStream.map(ipAndStat => ipAndStat._1)
-    )
+    toCassandra(spark.sparkContext, botStream.map(ipAndStat => ipAndStat._1))
 
     streamingContext.remember(Config.SPARK_DSTREAM_REMEMBER_INTERVAL)
     streamingContext.start()
     streamingContext.awaitTermination()
+
+    igniteContext.close(true)
   }
 
   def makeSparkStuff(): (SparkSession, StreamingContext) = {
