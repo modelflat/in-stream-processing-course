@@ -3,7 +3,7 @@ import io.circe.parser._
 import org.apache.spark.sql.types.StringType
 import java.sql.Timestamp
 
-import org.apache.spark.sql.streaming.OutputMode
+import org.apache.spark.sql.streaming.{OutputMode, Trigger}
 
 object ImplStructured {
 
@@ -29,6 +29,7 @@ object ImplStructured {
       .option("table", "bots_structured")
       .outputMode(OutputMode.Update())
 
+      .trigger(Trigger.ProcessingTime("10 seconds"))
       .start()
       .awaitTermination()
 
