@@ -18,9 +18,11 @@ libraryDependencies ++= Seq(
   "org.apache.ignite" % "ignite-spark"
 ).map(_ % "2.6.0")
 
+lazy val excludeJpountz = ExclusionRule(organization = "net.jpountz.lz4", name = "lz4")
+
 // kafka -> spark
-libraryDependencies += "org.apache.spark" %% "spark-streaming-kafka-0-10" % "2.3.2" // dstreams
-libraryDependencies += "org.apache.spark" %% "spark-sql-kafka-0-10" % "2.3.2" // structured
+libraryDependencies += "org.apache.spark" %% "spark-streaming-kafka-0-10" % "2.3.2" excludeAll excludeJpountz
+libraryDependencies += "org.apache.spark" %% "spark-sql-kafka-0-10" % "2.3.2" excludeAll excludeJpountz
 
 // spark -> cassandra
 libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "2.3.2"

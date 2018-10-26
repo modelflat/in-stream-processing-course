@@ -8,18 +8,20 @@ import io.circe.parser._
 import java.sql.Timestamp
 
 object Config {
-  val BOT_IP_CASSANDRA_TTL = 1.minutes
+  val BOT_IP_CASSANDRA_TTL = 10.minutes
+
   val BOT_CATEGORY_LIMIT = 10
   val BOT_REQUEST_LIMIT = 1000
   val BOT_CLICKS_TO_VIEWS_LIMIT = 5
   val BOT_CLICKS_TO_VIEWS_MIN_FRAMES = 5
 
-  val WATERMARK = 30
-  val DETECTION_WINDOW_INTERVAL = Seconds(15)
-  val DETECTION_SLIDE_INTERVAL = DETECTION_WINDOW_INTERVAL
+  val WATERMARK = Seconds(30)
 
-  val SPARK_BATCH_INTERVAL = Seconds(5)
-  val SPARK_DSTREAM_REMEMBER_INTERVAL = Minutes(10)
+  val DETECTION_SLIDE_INTERVAL = Seconds(30)
+  val DETECTION_WINDOW_INTERVAL = Seconds(90)
+
+  val SPARK_BATCH_INTERVAL = Seconds(30)
+  val SPARK_DSTREAM_REMEMBER_INTERVAL = Seconds(35)
 
   val TOPICS = Array("clickstream-log")
 
@@ -36,7 +38,7 @@ object BotClassifier {
 
     val strangeClicksToViews =
       if (passedFrames != -1)
-        if (passedFrames >= Config.BOT_CLICKS_TO_VIEWS_MIN_FRAMES || views > 0)
+        if (passedFrames >= Config.BOT_CLICKS_TO_VIEWS_MIN_FRAMES && views > 0)
           clicks / views > Config.BOT_CLICKS_TO_VIEWS_LIMIT
         else
           false

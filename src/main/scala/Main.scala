@@ -4,8 +4,11 @@ object Modes {
 }
 
 object Main extends App {
-  if (args.length > 0 && args(0) == Modes.DSTREAM)
+  if (args.length > 0 && args(0) == Modes.DSTREAM) {
+    println("Running DStream version")
     ImplDStreams.run()
-  else
+  } else {
+    println("Running Structured version")
     ImplStructured.run()
+  }
 }

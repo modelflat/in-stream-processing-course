@@ -34,21 +34,30 @@
         <property name="cacheConfiguration">
             <!-- SharedRDD cache example configuration (Atomic mode). -->
             <bean class="org.apache.ignite.configuration.CacheConfiguration">
-                <!-- Set a cache name. -->
-                <property name="name" value="sharedRDD"/>
-                <!-- Set a cache mode. -->
+
+                <property name="name" value="UserActionsCache"/>
+
                 <property name="cacheMode" value="PARTITIONED"/>
-                <!-- Index Integer pairs used in the example. -->
+
+                <property name="atomicityMode" value="ATOMIC"/>
+
                 <property name="indexedTypes">
                     <list>
-                        <value>java.lang.Integer</value>
-                        <value>java.lang.Integer</value>
+                        <value>java.sql.Timestamp</value>
+                        <value>java.lang.String</value>
                     </list>
                 </property>
-                <!-- Set atomicity mode. -->
-                <property name="atomicityMode" value="ATOMIC"/>
-                <!-- Configure a number of backups. -->
-                <property name="backups" value="1"/>
+
+                <property name="expiryPolicyFactory">
+                    <bean class="javax.cache.expiry.CreatedExpiryPolicy" factory-method="factoryOf">
+                        <constructor-arg>
+                            <bean class="javax.cache.expiry.Duration">
+                                <constructor-arg value="MINUTES"/>
+                                <constructor-arg value="10"/>
+                            </bean>
+                        </constructor-arg>
+                    </bean>
+                </property>
             </bean>
         </property>
 
