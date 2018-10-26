@@ -8,13 +8,12 @@ import org.apache.spark.sql.streaming.{DataStreamWriter, OutputMode, Trigger}
 import org.apache.spark.sql.types.StringType
 
 object StructuredConfig {
-
   val WATERMARK = "2 minutes" // allow lateness interval of two mins
 
   val WINDOW_DURATION = "10 minutes"
-  val SLIDE_DURATION = "30 seconds"
+  val SLIDE_DURATION = "40 seconds"
 
-  val TRIGGER = "30 seconds"
+  val TRIGGER = "40 seconds"
 }
 
 // due to datastax.connector not supporting stream writing (yet), we just make our own ForeachWriter
@@ -43,20 +42,19 @@ object ImplStructured {
   def run() {
     val spark = makeSparkStuff()
 
-    val igniteContext = new IgniteContext(spark.sparkContext, "ignite/config.xml", false)
-    val igniteCache = igniteContext.ignite().getOrCreateCache[String, LogRecord]("UserActionsCache")
+    val igniteContext = new IgniteContext(spark.sparkContext, "ignite/config.xml")
+    val igniteCache = igniteContext.ignite().getOrCreateCache[(String, Timestamp), LogRecord]("UserActionsCache")
 
     val ds = readStructuredDS(spark)
     ds.printSchema()
 
     // Save user data to Ignite.
-    // Hopefully will complete before our universe dies.
-    // TODO search for viable saving method?
+    // TODO search for/think of more efficient saving method? this looks awful
     ds.writeStream.foreach(new ForeachWriter[LogRecord] {
       override def open(partitionId: Long, version: Long): Boolean = true
 
       override def process(value: LogRecord): Unit = {
-        igniteCache.put(value.ip, value)
+        igniteCache.put((value.ip, value.time), value)
       }
 
       override def close(errorOrNull: Throwable): Unit = {}
@@ -83,8 +81,15 @@ object ImplStructured {
     val spark = SparkSession.builder.master("local[*]")
       .config("spark.streaming.kafka.consumer.cache.enabled", "false")
       .config("spark.cassandra.connection.keep_alive_ms", 120000)
+      // cassandra ttl should be 10 minutes
       .config("spark.cassandra.output.ttl", 600)
+      // should ignore existing entries while writing into db
       .config("spark.cassandra.output.ifNotExists", "true")
+      // local runs may produce exceptions related to ack timeout. in real world
+      // we are not likely to be running cassandra on the same machine or even cluster as spark
+      .config("spark.cassandra.output.consistency.level", "ANY")
+      // Default is 200, which is waaay too much for running locally
+      .config("spark.sql.shuffle.partitions", 20)
       .getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
     spark
@@ -111,8 +116,9 @@ object ImplStructured {
   def computeStatistics(spark: SparkSession, ds: Dataset[LogRecord]): Dataset[AggregatedLogRecord] = {
     import org.apache.spark.sql.functions._
     import spark.implicits._
-    ds.coalesce(4)
-//      .withWatermark("time", StructuredConfig.WATERMARK)
+    ds
+//      .repartition(spark.sparkContext.defaultParallelism, $"ip")
+      .withWatermark("time", StructuredConfig.WATERMARK)
       .groupBy($"ip", window($"time", StructuredConfig.WINDOW_DURATION, StructuredConfig.SLIDE_DURATION))
       .agg(
         sum($"clicks").alias("clicks"),

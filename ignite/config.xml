@@ -31,14 +31,27 @@
         http://www.springframework.org/schema/beans/spring-beans.xsd">
 
     <bean id="ignite.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
+        <!-- Configure memory usage -->
+        <property name="dataStorageConfiguration">
+            <bean class="org.apache.ignite.configuration.DataStorageConfiguration">
+                <!-- Redefining the default region's settings -->
+                <property name="defaultDataRegionConfiguration">
+                    <bean class="org.apache.ignite.configuration.DataRegionConfiguration">
+                        <property name="name" value="Default_Region"/>
+                        <!-- Setting the size of the default region to 1GB. -->
+                        <property name="initialSize" value="#{1L * 1024 * 1024 * 1024}"/>
+                        <property name="maxSize" value="#{2L * 1024 * 1024 * 1024}"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+
+        <!-- Configure cache. Main thing here is TTL -->
         <property name="cacheConfiguration">
             <!-- SharedRDD cache example configuration (Atomic mode). -->
             <bean class="org.apache.ignite.configuration.CacheConfiguration">
-
                 <property name="name" value="UserActionsCache"/>
-
                 <property name="cacheMode" value="PARTITIONED"/>
-
                 <property name="atomicityMode" value="ATOMIC"/>
 
                 <property name="indexedTypes">
@@ -53,7 +66,7 @@
                         <constructor-arg>
                             <bean class="javax.cache.expiry.Duration">
                                 <constructor-arg value="MINUTES"/>
-                                <constructor-arg value="10"/>
+                                <constructor-arg value="1"/>
                             </bean>
                         </constructor-arg>
                     </bean>
