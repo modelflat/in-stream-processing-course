@@ -9,10 +9,8 @@ import org.apache.spark.sql.types.StringType
 
 object StructuredConfig {
   val WATERMARK = "2 minutes" // allow lateness interval of two mins
-
   val WINDOW_DURATION = "10 minutes"
   val SLIDE_DURATION = "40 seconds"
-
   val TRIGGER = "40 seconds"
 }
 
@@ -45,7 +43,7 @@ object ImplStructured {
     val igniteContext = new IgniteContext(spark.sparkContext, "ignite/config.xml")
     val igniteCache = igniteContext.ignite().getOrCreateCache[(String, Timestamp), LogRecord]("UserActionsCache")
 
-    val ds = readStructuredDS(spark)
+    val ds = convertToStructured(spark, readStringsFromKafka(spark))
     ds.printSchema()
 
     // Save user data to Ignite.
@@ -61,10 +59,7 @@ object ImplStructured {
     })
       .trigger(Trigger.ProcessingTime("60 seconds"))
 
-    val groupedDS = computeStatistics(spark, ds)
-    groupedDS.printSchema()
-
-    val botsDS = filterBots(spark, groupedDS)
+    val botsDS = transformAndFilterBots(spark, ds)
     botsDS.explain(true)
 
     val exported = toCassandra(spark, botsDS)
@@ -95,7 +90,8 @@ object ImplStructured {
     spark
   }
 
-  def readStructuredDS(spark: SparkSession): Dataset[LogRecord] = {
+  def readStringsFromKafka(spark: SparkSession)
+  : Dataset[(String, String)] = {
     import spark.implicits._
     spark
       .readStream.format("kafka")
@@ -103,6 +99,12 @@ object ImplStructured {
       .option("subscribe", Config.TOPICS(0))
       .load()
       .select($"key".cast(StringType).as[String], $"value".cast(StringType).as[String])
+  }
+
+  def convertToStructured(spark: SparkSession, ds: Dataset[(String, String)])
+  : Dataset[LogRecord] = {
+    import spark.implicits._
+    ds
       .flatMap(keyVal => {decode[Action](keyVal._2) match {
         case Left(err) =>
           None
@@ -113,13 +115,14 @@ object ImplStructured {
       .as[LogRecord]
   }
 
-  def computeStatistics(spark: SparkSession, ds: Dataset[LogRecord]): Dataset[AggregatedLogRecord] = {
+  def computeStatistics(spark: SparkSession, ds: Dataset[LogRecord])
+  : Dataset[AggregatedLogRecord] = {
     import org.apache.spark.sql.functions._
     import spark.implicits._
     ds
-//      .repartition(spark.sparkContext.defaultParallelism, $"ip")
       .withWatermark("time", StructuredConfig.WATERMARK)
-      .groupBy($"ip", window($"time", StructuredConfig.WINDOW_DURATION, StructuredConfig.SLIDE_DURATION))
+      .groupBy($"ip",
+        window($"time", StructuredConfig.WINDOW_DURATION, StructuredConfig.SLIDE_DURATION))
       .agg(
         sum($"clicks").alias("clicks"),
         sum($"views").alias("views"),
@@ -129,13 +132,17 @@ object ImplStructured {
       .as[AggregatedLogRecord]
   }
 
-  def filterBots(spark: SparkSession, ds: Dataset[AggregatedLogRecord]): Dataset[AggregatedLogRecord] = {
-    ds.filter(alr => BotClassifier.classify(alr.clicks, alr.views, alr.categories.size)._1)
-  }
+  def filterBots(ds: Dataset[AggregatedLogRecord])
+  : Dataset[AggregatedLogRecord] = ds.filter(
+    alr => BotClassifier.classify(alr.clicks, alr.views, alr.categories.size)._1
+  )
 
   def toCassandra(spark: SparkSession, ds: Dataset[AggregatedLogRecord]): DataStreamWriter[AggregatedLogRecord] = {
     ds.writeStream
       .foreach(new CassandraForEachWriter(CassandraConnector(spark.sparkContext.getConf)))
   }
+
+  def transformAndFilterBots(spark: SparkSession, ds: Dataset[LogRecord])
+  : Dataset[AggregatedLogRecord] = filterBots(computeStatistics(spark, ds)).dropDuplicates()
 
 }

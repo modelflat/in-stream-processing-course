@@ -34,6 +34,11 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-parser"
 ).map(_ % "0.10.0")
 
+// scalatest
+libraryDependencies += "org.scalatest" % "scalatest_2.11" % "3.0.5" % "test"
+libraryDependencies += "com.holdenkarau" %% "spark-testing-base" % "2.3.1_0.10.0" % "test"
+libraryDependencies += "org.apache.spark" %% "spark-hive"  % "2.0.0" % "test"
+
 mainClass in assembly := Some("Main")
 
 assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false)

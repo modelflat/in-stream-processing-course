@@ -10,7 +10,7 @@ import java.sql.Timestamp
 object Config {
   val BOT_IP_CASSANDRA_TTL = 10.minutes
 
-  val BOT_CATEGORY_LIMIT = 10
+  val BOT_CATEGORY_LIMIT = 5
   val BOT_REQUEST_LIMIT = 1000
   val BOT_CLICKS_TO_VIEWS_LIMIT = 5
   val BOT_CLICKS_TO_VIEWS_MIN_FRAMES = 5
