@@ -16,7 +16,7 @@ object ImplDStreams {
 
   def run() {
     val (spark, streamingContext) = makeSparkStuff()
-    val igniteContext = new IgniteContext(spark.sparkContext, "ignite/config.xml", false)
+    val igniteContext = new IgniteContext(spark.sparkContext, "ignite/config.xml")
 
     val sharedRDD = igniteContext.fromCache[(String, Long), IpStat]("test")
 
