@@ -1,11 +1,9 @@
+import java.sql.Timestamp
+
+import io.circe.Decoder
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.spark.streaming.{Minutes, Seconds}
 
 import scala.concurrent.duration._
-import io.circe.Decoder
-import io.circe.generic.auto._
-import io.circe.parser._
-import java.sql.Timestamp
 
 object Config {
   val BOT_IP_CASSANDRA_TTL = 10.minutes
@@ -14,14 +12,6 @@ object Config {
   val BOT_REQUEST_LIMIT = 1000
   val BOT_CLICKS_TO_VIEWS_LIMIT = 5
   val BOT_CLICKS_TO_VIEWS_MIN_FRAMES = 5
-
-  val WATERMARK = Seconds(30)
-
-  val DETECTION_SLIDE_INTERVAL = Seconds(30)
-  val DETECTION_WINDOW_INTERVAL = Seconds(90)
-
-  val SPARK_BATCH_INTERVAL = Seconds(30)
-  val SPARK_DSTREAM_REMEMBER_INTERVAL = Seconds(35)
 
   val TOPICS = Array("clickstream-log")
 

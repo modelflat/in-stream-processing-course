@@ -5,7 +5,7 @@ import org.scalatest.FlatSpec
 
 class DStreamBotDetectionTest extends FlatSpec with StreamingSuiteBase {
 
-  override val batchDuration = Config.SPARK_BATCH_INTERVAL
+  override val batchDuration = DStreamConfig.BATCH_INTERVAL
 
   def operation(in: DStream[(String, Action)]): DStream[(String, String)] = {
     transformAndFindBots(in).map(el => (el._1, el._2.reason))
