@@ -1,11 +1,7 @@
-import java.time.Instant
-import java.util.Calendar
-
 import com.datastax.spark.connector.SomeColumns
 import com.datastax.spark.connector.writer.{TTLOption, WriteConf}
-import io.circe.generic.auto._
 import io.circe.parser._
-import org.apache.ignite.spark.{IgniteContext, IgniteRDD}
+import org.apache.ignite.spark.IgniteContext
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.streaming._
@@ -16,16 +12,15 @@ object ImplDStreams {
 
   def run() {
     val (spark, streamingContext) = makeSparkStuff()
+
     val igniteContext = new IgniteContext(spark.sparkContext, "ignite/config.xml")
+    val sharedRDD = igniteContext.fromCache[String, Action]("test")
 
-    val sharedRDD = igniteContext.fromCache[(String, Long), IpStat]("test")
-
-    val stream = makeFilteredAndParsedLogStream(streamingContext)
-
+    val rawStream = makeKafkaDirectStream(streamingContext)
     // Save user clicks and views to Ignite to be able to deal with them later
-    stream.foreachRDD(rdd => { sharedRDD.savePairs(rdd) })
+    rawStream.foreachRDD(rdd => { sharedRDD.savePairs(rdd) })
 
-    val botStream = findBots(stream)
+    val botStream = transformAndFindBots(rawStream)
 
     botStream.print()
 
@@ -39,9 +34,9 @@ object ImplDStreams {
     igniteContext.close(true)
   }
 
-  def makeSparkStuff(): (SparkSession, StreamingContext) = {
+  def makeSparkStuff(master: String = "local[*]"): (SparkSession, StreamingContext) = {
     val spark = SparkSession.builder
-      .master("local[*]")
+      .master(master)
       .config("spark.driver.memory", "4g")
       .config("spark.executor.memory", "4g")
       .config("spark.streaming.kafka.consumer.cache.enabled", "false")
@@ -53,17 +48,13 @@ object ImplDStreams {
     (spark, streamingContext)
   }
 
-  def makeFilteredAndParsedLogStream(streamingContext: StreamingContext): DStream[((String, Long), IpStat)] = {
-    val stream = KafkaUtils.createDirectStream[String, String](streamingContext,
+  def makeKafkaDirectStream(streamingContext: StreamingContext): DStream[(String, Action)] = {
+    KafkaUtils.createDirectStream[String, String](streamingContext,
       LocationStrategies.PreferConsistent,
       ConsumerStrategies.Subscribe[String, String](Config.TOPICS, Config.KAFKA_PARAMS)
-    )
-
-    stream
-      .map(r => (r.key(), decode[Action](r.value())))
+    ) .map(r => (r.key(), decode[Action](r.value())))
       .filter(entry => entry._1 != null && !entry._1.isEmpty && entry._2.isRight)
       .map(entry => (entry._1, entry._2.right.get))
-      .map(e => ((e._1, e._2.time / Config.WATERMARK.milliseconds * 1000), e._2.toIpStat))
   }
 
   def toCassandra(sc: SparkContext, stream: DStream[(String, EvaluatedStat)]): DStream[(String, EvaluatedStat)] = {
@@ -79,11 +70,15 @@ object ImplDStreams {
     stream
   }
 
+  def transformActions(stream: DStream[(String, Action)]): DStream[((String, Long), IpStat)] = {
+    stream.map(e => ((e._1, e._2.time / Config.WATERMARK.milliseconds * 1000), e._2.toIpStat))
+  }
+
   def updateState(ipAndWatermarkedTime: (String, Long),
                   newIpStatOpt: Option[IpStat],
                   state: State[List[(IpStat, Long)]]): (String, List[IpStat]) = {
     val newStats = newIpStatOpt.getOrElse(IpStat.empty())
-    if (!state.isTimingOut()) {
+    if (!state.isTimingOut) {
       // update state with new data
       state.update(
         if (state.exists) {
@@ -113,6 +108,10 @@ object ImplDStreams {
       .reduceByKey((l: List[IpStat], r: List[IpStat]) => l ++ r)
       .mapValues(EvaluatedStat.classify)
       .filter(stat => stat._2.isBot)
+  }
+
+  def transformAndFindBots(stream: DStream[(String, Action)]): DStream[(String, EvaluatedStat)] = {
+    findBots(transformActions(stream))
   }
 
 }

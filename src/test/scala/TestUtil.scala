@@ -1,9 +1,8 @@
+import java.sql.Timestamp
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.sql.Timestamp
 
 import org.apache.spark.SparkContext
-import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.streaming.dstream.DStream
 

@@ -74,7 +74,7 @@ case class EvaluatedStat(originalStat: IpStat, isBot: Boolean, reason: String)
 object EvaluatedStat {
   def classify(ipStat: List[IpStat]): EvaluatedStat = {
     val aggr = ipStat reduce (_+_)
-    val res = BotClassifier.classify(aggr.clicks, aggr.views, aggr.categories.size, ipStat.size)
+    val res = BotClassifier.classify(aggr.clicks, aggr.views, aggr.categories.size)
     EvaluatedStat(aggr, res._1, res._2)
   }
 }
