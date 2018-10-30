@@ -39,6 +39,11 @@ libraryDependencies += "org.scalatest" % "scalatest_2.11" % "3.0.5" % "test"
 libraryDependencies += "com.holdenkarau" %% "spark-testing-base" % "2.3.1_0.10.0" % "test"
 libraryDependencies += "org.apache.spark" %% "spark-hive"  % "2.0.0" % "test"
 
+fork in Test := true
+parallelExecution in Test := false
+
+javaOptions ++= Seq("-Xms512M", "-Xmx2048M", "-XX:MaxPermSize=2048M", "-XX:+CMSClassUnloadingEnabled")
+
 mainClass in assembly := Some("Main")
 
 assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false)
