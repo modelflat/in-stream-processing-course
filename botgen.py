@@ -36,7 +36,7 @@ def random_content_bot(): return random.choice(bot_categories)
 
 # generate random action for users, bots
 # bots clicks more often that users
-def random_action_user(): return random.choice(['click', 'view', 'view', 'view'])  # probabilities click/view = 25/75
+def random_action_user(): return random.choice(["view"] * 9 + ["click"]) # 1 / 10
 
 
 def random_action_bot(): return random.choice(['click', 'click', 'click', 'view'])  # probabilities click/view = 75/25
